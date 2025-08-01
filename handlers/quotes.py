@@ -1,6 +1,7 @@
 from telebot import types
 from services.quotes_api import fetch_random_quote_ru
 from services.database import add_favourite_quote, get_random_fav
+from services.cats_api import fetch_random_catfact_ru
 
 TEST_TAGS = [
     'Важное', 'Любовь', 'Деньги', 'Люди', 'Жизнь',
@@ -30,5 +31,9 @@ def register_bot_handlers(bot):
         btn2 = types.InlineKeyboardButton("Поменять категорию", callback_data="fav:chng")
         kb.add(btn1, btn2)
         bot.send_message(chat_id=message.chat.id, text=f"{text}\nКатегория: {tag}", reply_markup=kb)
+
+    @bot.message_handler(func=lambda m: m.text == "Случайный факт о котах")
+    def send_fact(message):
+        bot.send_message(chat_id=message.chat.id, text = fetch_random_catfact_ru())
 
 

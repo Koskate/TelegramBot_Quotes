@@ -11,3 +11,4 @@ def fetch_random_catfact_ru():
     except Exception as e:
         error_msg = f"Ошибка: {str(e)}"
         print("Error details:", e)
+        return ""
