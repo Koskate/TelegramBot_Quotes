@@ -21,7 +21,7 @@ def register_callback_handlers(bot):
                                   reply_markup = kb)
 
         elif action=="set":
-            user_id, quote, tag = call.message.from_user.id, call.message.text, parts[2]
+            user_id, quote, tag = call.from_user.id, call.message.text, parts[2]
             add_favourite_quote(user_id, quote, tag)
             bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text = "Добавлено!")
 
