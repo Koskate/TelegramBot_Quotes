@@ -3,6 +3,7 @@ import private_info as pin
 import atexit
 import threading
 
+
 conn = sqlite3.connect(pin.PATH, check_same_thread=False)
 cursor = conn.cursor()
 atexit.register(conn.close) #Здесь мы говорим о том, что когда программа завершится, то соединение прекратится в любом случае
@@ -41,7 +42,7 @@ def delete_quote_by_id(id_quote, call):
                 ''', (id_quote,))
         conn.commit()
 
-def change_tag_by_id(id_quote, Tag, call):
+def change_tag_by_id(id_quote, Tag):
     with _db_lock:
         cursor.execute('''
             UPDATE favourite_quotes
@@ -49,3 +50,56 @@ def change_tag_by_id(id_quote, Tag, call):
             WHERE id = ?
         ''', (Tag, id_quote))
         conn.commit()
+
+def set_new_user(user_id):
+    with _db_lock:
+        cursor.execute('''
+        INSERT INTO user_tags (user_id, Tag)
+        SELECT ?, ?
+        WHERE NOT EXISTS (
+            SELECT 1 FROM user_tags
+            WHERE user_id = ? AND Tag = ?
+        ) 
+        ''', (user_id, "Без категории", user_id, "Без категории"))
+        conn.commit()
+
+def get_user_tags(user_id):
+    with _db_lock:
+        cursor.execute('''
+        SELECT * FROM user_tags
+        WHERE user_id = ?
+        ''', (user_id,))
+
+        temp_list = cursor.fetchall()
+        if temp_list:
+            temp_tags = []
+            for item in temp_list: #Перебираем кортежи
+                temp_tags.append(item[2])
+            return temp_tags
+        else:
+            return None
+
+def add_user_tag(user_id, Tag):
+    with _db_lock:
+        cursor.execute('''
+        INSERT INTO user_tags (user_id, Tag)
+        SELECT ?, ?
+        WHERE NOT EXISTS (
+            SELECT 1 FROM user_tags
+            WHERE user_id = ? AND Tag = ?
+        )
+        ''', (user_id, Tag, user_id, Tag))
+        conn.commit()
+
+
+def del_user_tag(user_id, Tag):
+    with _db_lock:
+        try:
+            cursor.execute('''
+            DELETE FROM user_tags
+            WHERE user_id = ? AND Tag = ?
+            ''', (user_id, Tag))
+            conn.commit()
+        except:
+            conn.rollback()
+            raise
