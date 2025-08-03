@@ -63,7 +63,7 @@ def set_new_user(user_id):
         ''', (user_id, "Без категории", user_id, "Без категории"))
         conn.commit()
 
-def get_user_tags(user_id):
+def get_actual_user_tags(user_id): #Только те категории цитат, которые актуальны для данного пользователя
     with _db_lock:
         cursor.execute('''
         SELECT * FROM user_tags
@@ -103,3 +103,48 @@ def del_user_tag(user_id, Tag):
         except:
             conn.rollback()
             raise
+
+def get_all_user_tags(user_id): #Это у нас вытаскивание всех категорий имеющихся у пользователя цитат (даже удаленных)
+    with _db_lock:
+        try:
+            cursor.execute('''
+            SELECT DISTINCT Tag FROM favourite_quotes
+            WHERE user_id = ?
+            ORDER BY Tag
+            ''', (user_id,))
+            return [row[0] for row in cursor.fetchall()]
+        except:
+            return []
+
+def get_quotes_by_tag(user_id, Tag):
+    with _db_lock:
+        try:
+            cursor.execute('''
+            SELECT Quote FROM favourite_quotes
+            WHERE user_id = ? AND Tag = ?
+            ''', (user_id, Tag))
+            return [row[0] for row in cursor.fetchall()]
+        except:
+            return []
+
+def get_num_quotes_by_tag(user_id, Tag): #Количество цитат с таким тэгом у этого пользователя
+    with _db_lock:
+        try:
+            cursor.execute('''
+            SELECT COUNT(*) FROM favourite_quotes
+            WHERE user_id = ? AND Tag = ?
+            ''', (user_id, Tag))
+            return cursor.fetchone()[0]
+        except:
+            return None
+
+def search_by_userid_n_text(user_id, Quote):
+    with _db_lock:
+        try:
+            cursor.execute('''
+            SELECT id FROM favourite_quotes
+            WHERE user_id = ? AND Quote = ?
+            ''', (user_id, Quote))
+            return int(cursor.fetchone()[0])
+        except:
+            return None

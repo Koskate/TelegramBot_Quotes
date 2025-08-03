@@ -1,7 +1,9 @@
 from telebot import types
 from services.quotes_api import fetch_random_quote_ru
-from services.database import add_favourite_quote, get_random_fav, get_user_tags
+from services.database import add_favourite_quote, get_random_fav, get_actual_user_tags, get_all_user_tags
 from services.cats_api import fetch_random_catfact_ru
+from services.keyboards import quote_keyboard, navigation_quotes_categories_menu
+import math
 
 
 def register_bot_handlers(bot):
@@ -21,11 +23,15 @@ def register_bot_handlers(bot):
             return
 
         quote_id, text, tag = res
-        kb = types.InlineKeyboardMarkup()
-        btn1 = types.InlineKeyboardButton("Удалить из избранного", callback_data=f"fav:del:{quote_id}")
-        btn2 = types.InlineKeyboardButton("Поменять категорию", callback_data=f"fav:chng:{quote_id}")
-        kb.add(btn1, btn2)
+        kb = quote_keyboard(quote_id)
         bot.send_message(chat_id=message.chat.id, text=f"{text}\nКатегория: {tag}", reply_markup=kb)
+
+    @bot.message_handler(func = lambda m:m.text == "Навигация по своим цитатам")
+    def nav_quotes(message):
+        user_tags = get_all_user_tags(message.from_user.id)
+        count_pages_categories = math.ceil(len(user_tags)/4) #кол-во требуемых страниц
+        kb = navigation_quotes_categories_menu(user_tags=user_tags, count_pages_categories= count_pages_categories, page=0)
+        bot.send_message(chat_id=message.chat.id, text=f"Выберите желаемую категорию:", reply_markup=kb)
 
 
     @bot.message_handler(func=lambda m:m.text == "Работа с категориями")
@@ -34,7 +40,7 @@ def register_bot_handlers(bot):
         item1 = types.InlineKeyboardButton("Добавить категорию", callback_data = "tag:add")
         item2 = types.InlineKeyboardButton("Удалить категорию", callback_data = "tag:del")
         kb.add(item1, item2)
-        temp_list = get_user_tags(message.from_user.id)
+        temp_list = get_actual_user_tags(message.from_user.id)
         text = "\n".join(temp_list)
         bot.send_message(chat_id = message.chat.id, text = f"Это Ваши категории:\n{text}", reply_markup = kb)
 

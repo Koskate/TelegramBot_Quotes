@@ -1,6 +1,9 @@
 from telebot import types
 from services.database import (add_favourite_quote, delete_quote_by_id,
-                               change_tag_by_id, add_user_tag, get_user_tags, del_user_tag)
+                               change_tag_by_id, add_user_tag, get_actual_user_tags, del_user_tag, get_all_user_tags,
+                               search_by_userid_n_text)
+from services.keyboards import navigation_quotes_categories_menu, navigation_quotes_in_cat_menu, quote_keyboard
+PAGE_SIZE = 5
 
 def register_callback_handlers(bot):
     @bot.callback_query_handler(func = lambda c: c.data.startswith("fav:"))
@@ -12,7 +15,7 @@ def register_callback_handlers(bot):
 
         if action == "add":
             kb=types.InlineKeyboardMarkup(row_width=3)
-            tag_list = get_user_tags(call.from_user.id)
+            tag_list = get_actual_user_tags(call.from_user.id)
             temp_list = []
             for tag in tag_list:
                 temp_list.append(types.InlineKeyboardButton(tag, callback_data=f"fav:set:{tag}"))
@@ -32,7 +35,7 @@ def register_callback_handlers(bot):
 
         elif action == "chng" and len(parts) == 3:
             kb = types.InlineKeyboardMarkup(row_width=3)
-            tag_list = get_user_tags(call.from_user.id)
+            tag_list = get_actual_user_tags(call.from_user.id)
             temp_list = []
             for tag in tag_list:
                 temp_list.append(types.InlineKeyboardButton(tag, callback_data=f"fav:chng:{parts[2]}:{tag}"))
@@ -56,7 +59,7 @@ def register_callback_handlers(bot):
             bot.register_next_step_handler(msg, process_new_tag)
         elif action == "del" and len(parts) == 2:
             kb = types.InlineKeyboardMarkup(row_width=3)
-            tag_list = get_user_tags(call.from_user.id)
+            tag_list = get_actual_user_tags(call.from_user.id)
             temp_list = []
             for tag in tag_list:
                 temp_list.append(types.InlineKeyboardButton(tag, callback_data=f"tag:del:{tag}"))
@@ -73,11 +76,52 @@ def register_callback_handlers(bot):
                                                                     "у всех пользователей, ее нельзя удалить")
         bot.answer_callback_query(call.id)  # Это сообщение телеграмму, что все ок, сообщение получил, бот работает
 
-
     def process_new_tag(message):
         Tag = message.text.strip()
         user_id = message.from_user.id
         add_user_tag(user_id, Tag)
         bot.send_message(message.chat.id, f"Категория «{Tag}» добавлена ✅")
 
+    @bot.callback_query_handler(func = lambda c: c.data.startswith("nav:quotes_cat:")) #Здесь будем реализовывать функционал слайдера
+    def pagination_quotes_categories(call):
+    # '''
+    # Для начала поразмышляем:
+    # 1) Во-первых, нам нужно предложить пользователю выбрать одну из категорий, которым принадлежит хотя бы одна цитата этого пользователя
+    #                             потому что после удаления категории у этого пользователя могут остаться цитаты из удаленных категорий.
+    #                             Сделать это лучше тоже своего рода слайдером, так как категорий может быть много.
+    #                             Выводить мы их будем в алфавитном порядке, по 6-8 шт на страницу (+ кнопки вперед/назад)
+    # 2) Во-вторых, нужно подсчитать кол-во цитат в выбранной категории у этого пользователя,
+    #                             сделать навигацию ПО СТРАНИЦАМ (подглядел у анилибрии)
+    #                             Хммм, думаю еще стоит добавить возможность выбрать определенную цитату для взаимодействия
+    # '''
+        parts = call.data.split(":")  # [nav, quotes_cat, count_pages_categories, page],
+    #                                   [nav, quotes_cat, tag, NameOfCategory],
+    #                                   [nav, quotes_cat, tag, NameOfCategory, count_pages_categories_quotes, page],
+    #                                   [nav, quotes_cat, search, Tag, text_of_Quote, call.from_user.id]
 
+
+        if len(parts) == 4 and parts[2] != "tag":
+            user_tags = get_all_user_tags(call.from_user.id)
+            kb = navigation_quotes_categories_menu(user_tags=user_tags, count_pages_categories=int(parts[2]),
+                                                   page=int(parts[3]))
+            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                  text=f"Выберите желаемую категорию:", reply_markup=kb)
+        elif len(parts) == 4 and parts[2] == "tag":
+            kb = navigation_quotes_in_cat_menu(call = call,
+                                               Tag = parts[3],
+                                               page = 0)
+            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                  text=f"Выберите цитату:", reply_markup=kb)
+        elif len(parts) == 6 and parts[2] == "tag":
+            kb = navigation_quotes_in_cat_menu(call=call,
+                                           Tag=parts[3],
+                                           page=parts[-1])
+            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                          text=f"Выберите цитату:", reply_markup=kb)
+        elif parts[2] == "search":
+            quote_id = search_by_userid_n_text(user_id=call.from_user.id, Quote = parts[4])
+            kb = quote_keyboard(quote_id)
+            bot.send_message(chat_id=call.message.chat.id, text=f"{parts[4]}\nКатегория: {parts[3]}", reply_markup=kb)
+
+
+        bot.answer_callback_query(call.id)  # Это сообщение телеграмму, что все ок, сообщение получил, бот работает
