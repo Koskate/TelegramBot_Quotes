@@ -1,17 +1,18 @@
 from telebot import types
 from telebot.types import InlineKeyboardMarkup
-from services.database import get_quotes_by_tag, get_num_quotes_by_tag
+from services.database import get_page_category, get_quantity_user_tags, get_page_quote, get_quantity_user_quotes_by_tag
+import math
 
 
 def quote_keyboard(quote_id) -> InlineKeyboardMarkup():
-    # Это просто inline-клавиатура для работы с конкретной цитатой, возвращает объект клавиатурыв
+    # Это просто inline-клавиатура для работы с конкретной цитатой, возвращает объект клавиатуры
     kb = types.InlineKeyboardMarkup()
     btn1 = types.InlineKeyboardButton("Удалить из избранного", callback_data=f"fav:del:{quote_id}")
     btn2 = types.InlineKeyboardButton("Поменять категорию", callback_data=f"fav:chng:{quote_id}")
     kb.add(btn1, btn2)
     return kb
 
-def navigation_quotes_categories_menu(user_tags, count_pages_categories, page = 0):
+def navigation_quotes_categories_menu(user_id, page = 0):
     '''
     Здесь у нас будет менюшка выбора категории цитат, с которой хочет работать пользователь
     Текст сообщения: Выберите категорию, с которой хотели бы работать:
@@ -21,40 +22,46 @@ def navigation_quotes_categories_menu(user_tags, count_pages_categories, page = 
 
     Пока отказываюсь от этого функционала, голова кипит
     '''
-    n = 3 #Количество категорий на страницу
     kb = types.InlineKeyboardMarkup(row_width = 5)
-    if page != count_pages_categories: #Если не равно максимальному числу, то значит на этой странице точно есть n категории, спокойно заполняем
-        for i, tag in enumerate(user_tags[n*page:n*(page+1)]):
-            kb.add(types.InlineKeyboardButton(f"{tag}", callback_data= f"nav:quotes_cat:tag:{tag}")) #Здесь у нас в коллбеке КАТЕГОРИЯ
-    else: #Тут вот может не быть n категорий, заполняем, что есть
-        for i, tag in enumerate(user_tags[count_pages_categories * page:]):
-            kb.add(types.InlineKeyboardButton(f"{tag}", callback_data=f"nav:quotes_cat:tag:{tag}"))
+    limit = 4
+    temp_list = get_page_category(user_id = user_id, page = page, limit = limit)
+    for Tag, quantity_quotes in temp_list:
+        # Делаю коллбэки для всех категорий сразу на нулевую страницу
+        kb.add(types.InlineKeyboardButton(text=f"{Tag} - Кол-во цитат: {quantity_quotes}", callback_data=f"nav:cat:tag:{Tag}:0"))
 
-    kb.add(types.InlineKeyboardButton(f"###Ниже страницы навигации###", callback_data=f"no_call"))
-    kb.add(*[types.InlineKeyboardButton(text = f"{btn}", callback_data=f"nav:quotes_cat:{count_pages_categories}:{btn}")
-                                        for btn in range(count_pages_categories) if btn!=page]) #Да, хвастаюсь, знаю генераторы, здесь btn - это номер страницы
+    quantity_pages = math.ceil(get_quantity_user_tags(user_id)/limit)
+    print(get_quantity_user_tags(user_id))
+    kb.add(*[types.InlineKeyboardButton(text=f"{btn}", callback_data=f"nav:cat:{btn}") for btn in range(quantity_pages) if btn != page])
+
+    # if page != 0:
+    #     kb.add(types.InlineKeyboardButton(text=f"Предыдущая страница", callback_data=f"nav:cat:{page-1}"))
+    # if page != quantity_pages:
+    #     kb.add(types.InlineKeyboardButton(text=f"Следующая страница", callback_data=f"nav:cat:{page+1}"))
+
     return kb
 
-def navigation_quotes_in_cat_menu(call, Tag, page = 0):
+def navigation_quotes_in_cat_menu(user_id, Tag, page = 0):
     '''
     Короче, я на верном пути, однако в качестве улучшения на будущее можно не передавать целые огромные массивы
     в функцию клавиатуры, а лишь вытаскивать нужную для показа часть.
     Здесь возникает вопрос: либо мне важнее скорость вычислений (тогда я через условие SQL
     ограничиваю нужный мне вывод и часто обращаюсь к бд), либо мне важнее ограничить кол-во обращений к бд (выгружаю полностью)
     '''
-    n = 4
-    user_quotes_by_tag = get_quotes_by_tag(user_id=call.from_user.id, Tag = Tag)
-    count_pages_categories_quotes = get_num_quotes_by_tag(user_id=call.from_user.id, Tag = Tag)
-
     kb = types.InlineKeyboardMarkup(row_width=5)
-    if page != count_pages_categories_quotes: #Если не равно максимальному числу, то значит на этой странице точно есть n цитат, спокойно заполняем
-        for i, Quote in enumerate(user_quotes_by_tag[n*page:n*(page+1)]):
-            kb.add(types.InlineKeyboardButton(f"{Quote}", callback_data= f"nav:quotes_cat:search:{Tag}:{Quote}:{call.from_user.id}")) #Здесь у нас в коллбеке ЦИТАТЫ
-    else: #Тут вот может не быть n категорий, заполняем, что есть
-        for i, Quote in enumerate(user_quotes_by_tag[count_pages_categories_quotes * page:]):
-            kb.add(types.InlineKeyboardButton(f"{Quote}", callback_data=f"nav:quotes_cat:search:{Tag}:{Quote}:{call.from_user.id}"))
+    limit = 3
+    temp_list = get_page_quote(user_id=user_id, tag= Tag, page=page, limit=limit)
+    for Quote, id in temp_list:
+        # Делаю коллбэки для всех цитат, передавай id записи
+        kb.add(types.InlineKeyboardButton(text=f"{Quote}", callback_data=f"nav:cat:tag:{Tag}:quote:{id}"))
 
-    kb.add(types.InlineKeyboardButton(f"###Ниже страницы навигации###", callback_data=f"no_call"))
-    kb.add(*[types.InlineKeyboardButton(text = f"{btn}", callback_data=f"nav:quotes_cat:tag:{Tag}:{count_pages_categories_quotes}:{btn}")
-                                        for btn in range(count_pages_categories_quotes) if btn!=page]) #Да, хвастаюсь, знаю генераторы, здесь btn - это номер страницы
-    return kb#[nav, quotes_cat, tag, NameOfCategory, count_pages_categories_quotes, page],
+    quantity_pages = math.ceil(get_quantity_user_quotes_by_tag(user_id=user_id, Tag=Tag) / limit)
+    kb.add(
+        *[types.InlineKeyboardButton(text=f"{btn}", callback_data=f"nav:cat:tag:{Tag}:{btn}") for btn in range(quantity_pages) if
+          btn != page])
+
+    # if page != 0:
+    #     kb.add(types.InlineKeyboardButton(text=f"Предыдущая страница", callback_data=f"nav:cat:tag:{Tag}:{page-1}"))
+    # if page != quantity_pages:
+    #     kb.add(types.InlineKeyboardButton(text=f"Следующая страница", callback_data=f"nav:cat:tag:{Tag}:{page+1}"))
+
+    return kb

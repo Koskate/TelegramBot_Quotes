@@ -104,47 +104,63 @@ def del_user_tag(user_id, Tag):
             conn.rollback()
             raise
 
-def get_all_user_tags(user_id): #Это у нас вытаскивание всех категорий имеющихся у пользователя цитат (даже удаленных)
+def get_page_category(user_id, page, limit): #Здесь будем вытаскивать нужную страницу категорий из бд с кол-вом цитат внутри
     with _db_lock:
+        offset = page * limit #Сколько надо пропустить
         try:
             cursor.execute('''
-            SELECT DISTINCT Tag FROM favourite_quotes
+            SELECT Tag, COUNT(*) FROM favourite_quotes
             WHERE user_id = ?
+            GROUP BY Tag
             ORDER BY Tag
-            ''', (user_id,))
-            return [row[0] for row in cursor.fetchall()]
+            LIMIT ? OFFSET ?
+            ''', (user_id, limit, offset))
+            return cursor.fetchall()
         except:
-            return []
+            return None
 
-def get_quotes_by_tag(user_id, Tag):
+def get_quantity_user_tags(user_id):
     with _db_lock:
         try:
             cursor.execute('''
-            SELECT Quote FROM favourite_quotes
-            WHERE user_id = ? AND Tag = ?
-            ''', (user_id, Tag))
-            return [row[0] for row in cursor.fetchall()]
+            SELECT COUNT(DISTINCT Tag) FROM favourite_quotes
+            WHERE user_id = ?
+            ''', (user_id,))
+            return int(cursor.fetchone()[0])
         except:
-            return []
+            return None
 
-def get_num_quotes_by_tag(user_id, Tag): #Количество цитат с таким тэгом у этого пользователя
+def get_page_quote(user_id, tag, page, limit): #Здесь будем вытаскивать нужную страницу категорий из бд с кол-вом цитат внутри
+    with _db_lock:
+        offset = page * limit #Сколько надо пропустить
+        try:
+            cursor.execute('''
+            SELECT Quote, id FROM favourite_quotes
+            WHERE user_id = ? AND Tag = ?
+            LIMIT ? OFFSET ?
+            ''', (user_id, tag, limit, offset))
+            return cursor.fetchall()
+        except:
+            return None
+
+def get_quantity_user_quotes_by_tag(user_id, Tag):
     with _db_lock:
         try:
             cursor.execute('''
             SELECT COUNT(*) FROM favourite_quotes
             WHERE user_id = ? AND Tag = ?
             ''', (user_id, Tag))
-            return cursor.fetchone()[0]
+            return int(cursor.fetchone()[0])
         except:
             return None
 
-def search_by_userid_n_text(user_id, Quote):
+def get_quote_by_id(quote_id):
     with _db_lock:
         try:
             cursor.execute('''
-            SELECT id FROM favourite_quotes
-            WHERE user_id = ? AND Quote = ?
-            ''', (user_id, Quote))
-            return int(cursor.fetchone()[0])
+            SELECT Quote FROM favourite_quotes
+            WHERE id = ?
+            ''', (quote_id,))
+            return cursor.fetchone()[0]
         except:
             return None
